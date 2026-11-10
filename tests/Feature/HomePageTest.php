@@ -20,6 +20,8 @@ class HomePageTest extends TestCase
             ->assertSee('Your ideas,')
             ->assertSee('Your idea wall is open.')
             ->assertSee('Add a note')
+            ->assertSee('A FEW QUICK SHORTCUTS')
+            ->assertSee('data-workspace-menu', false)
             ->assertDontSee('Laravel');
     }
 }

@@ -68,6 +68,65 @@ class IdeaPersistenceTest extends TestCase
         $this->assertDatabaseCount('ideas', 0);
     }
 
+    public function test_canvas_heading_content_and_position_are_persisted(): void
+    {
+        $user = User::factory()->create();
+        $idea = Idea::factory()->for($user)->create(['title' => 'Garden notes']);
+        $heading = [
+            'type' => 'heading',
+            'left' => 210,
+            'top' => 94,
+            'content' => ['A garden of ideas', 'Make room for the unexpected'],
+        ];
+
+        $this->actingAs($user)
+            ->putJson(route('ideas.update', $idea), [
+                'canvas_items' => [$heading],
+            ])
+            ->assertOk()
+            ->assertJsonPath('idea.canvasItems.0.content.0', 'A garden of ideas')
+            ->assertJsonPath('idea.canvasItems.0.content.1', 'Make room for the unexpected');
+
+        $this->assertSame([$heading], $idea->fresh()->canvas_items);
+    }
+
+    public function test_a_user_can_favorite_and_unfavorite_an_idea_without_overwriting_other_fields(): void
+    {
+        $user = User::factory()->create();
+        $canvasItems = [['type' => 'note', 'left' => 10, 'top' => 20, 'content' => ['Keep this']]];
+        $idea = Idea::factory()->for($user)->create([
+            'title' => 'Garden notes',
+            'canvas_items' => $canvasItems,
+        ]);
+
+        $this->actingAs($user)
+            ->putJson(route('ideas.update', $idea), ['is_favorite' => true])
+            ->assertOk()
+            ->assertJsonPath('idea.favorite', true)
+            ->assertJsonPath('idea.title', 'Garden notes');
+
+        $this->assertSame($canvasItems, $idea->fresh()->canvas_items);
+        $this->assertDatabaseHas('ideas', ['id' => $idea->id, 'is_favorite' => true]);
+
+        $this->putJson(route('ideas.update', $idea), ['is_favorite' => false])
+            ->assertOk()
+            ->assertJsonPath('idea.favorite', false);
+
+        $this->assertDatabaseHas('ideas', ['id' => $idea->id, 'is_favorite' => false]);
+    }
+
+    public function test_an_owner_can_delete_an_idea(): void
+    {
+        $user = User::factory()->create();
+        $idea = Idea::factory()->for($user)->create();
+
+        $this->actingAs($user)
+            ->deleteJson(route('ideas.destroy', $idea))
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('ideas', ['id' => $idea->id]);
+    }
+
     public function test_a_user_cannot_read_or_change_another_users_idea(): void
     {
         $owner = User::factory()->create();
